@@ -9,14 +9,37 @@ from pipeline.pdf_processing import process_pdf
 from pipeline.embedding_store import create_vector_store
 from pipeline.rag_pipeline import create_rag_pipeline
 
-# Title of the Streamlit app
-st.title("Real-Time Financial Report Analyzer")
+# Set Streamlit page configuration
+st.set_page_config(
+    page_title="Financial Report Analyzer",
+    page_icon="📊",
+    layout="wide",
+)
+
+# Sidebar branding
+st.sidebar.title("📊 Financial Report Analyzer")
+st.sidebar.markdown("Analyze 10-K filings and financial reports in real-time using AI-powered insights.")
+
+# Main title
+st.title("📈 Real-Time Financial Report Analyzer")
+st.markdown("""
+Welcome to the **Financial Report Analyzer**! This tool allows you to upload financial reports (e.g., 10-K filings), analyze them, and get AI-powered answers to your queries based on the uploaded documents. 🚀
+""")
 
 # File upload section
-uploaded_files = st.file_uploader("Upload Financial Reports (PDF)", type="pdf", accept_multiple_files=True)
+st.subheader("Step 1: Upload Financial Reports")
+uploaded_files = st.file_uploader(
+    "Upload one or more PDF files containing financial reports.",
+    type="pdf",
+    accept_multiple_files=True,
+)
+
+# Initialize global variables for vector store and pipeline
+vector_store = None
+rag_pipeline = None
 
 if uploaded_files:
-    st.write("Processing uploaded files...")
+    st.info("Processing uploaded files...")
 
     # Initialize an empty list to store all chunks from uploaded PDFs
     chunks_list = []
@@ -33,41 +56,50 @@ if uploaded_files:
         chunks_list.extend(chunks)
 
     # Create a vector store using FAISS
-    st.write("Creating vector store...")
+    st.info("Creating vector store...")
     vector_store = create_vector_store(chunks_list)
 
     st.success("Files processed and vector store created successfully!")
 
-    # Create the RAG pipeline
-    st.write("Initializing RAG pipeline...")
-    qa_pipeline = create_rag_pipeline(vector_store)
+    # Create the RAG pipeline using RetrievalQAWithSourcesChain
+    st.info("Initializing RAG pipeline...")
+    rag_pipeline = create_rag_pipeline(vector_store)
 
     st.success("RAG pipeline initialized successfully!")
 
-    # Query section
-    query_input = st.text_input("Enter your query:")
-    if query_input:
-        st.write("Processing your query...")
-        try:
-            # Retrieve relevant documents before passing them to the RAG pipeline
-            retriever = vector_store.as_retriever()
-            retrieved_docs = retriever.get_relevant_documents(query_input)
+# Query section
+st.subheader("Step 2: Ask Questions")
+query_input = st.text_input(
+    "Enter your query below (e.g., 'What are Apple's key risk factors?'):",
+)
 
-            # Print retrieved documents for debugging purposes
-            st.subheader("Retrieved Documents:")
-            if retrieved_docs:
-                for i, doc in enumerate(retrieved_docs):
+if query_input and rag_pipeline:
+    st.info("Processing your query...")
+    
+    try:
+        response = rag_pipeline.invoke({"question": query_input})
+
+        # Display the generated answer and source documents in columns for better layout
+        col1, col2 = st.columns([2, 1])
+
+        with col1:
+            st.subheader("Generated Answer:")
+            st.markdown(f"**{response['answer']}**")
+
+        with col2:
+            st.subheader("Source Documents:")
+            if response["source_documents"]:
+                for i, doc in enumerate(response["source_documents"]):
                     st.write(f"Document {i + 1}:")
                     st.write(doc.page_content)
             else:
                 st.warning("No relevant documents found.")
+                
+    except Exception as e:
+        st.error(f"Error occurred: {e}")
 
-            # Run the query through the RAG pipeline
-            response = qa_pipeline({"question": query_input})
-
-            # Display the generated answer and source documents
-            st.subheader("Generated Answer:")
-            st.write(response["answer"])
-
-        except Exception as e:
-            st.error(f"Error occurred: {e}")
+# Footer branding
+st.markdown("---")
+st.markdown("""
+Developed by Natesh | Powered by LangChain & OpenAI | © 2025  
+""")

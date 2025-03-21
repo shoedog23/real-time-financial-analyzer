@@ -1,4 +1,5 @@
 from langchain.chains import RetrievalQAWithSourcesChain
+from langchain.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
@@ -25,6 +26,17 @@ def create_rag_pipeline(vector_store):
     Returns:
         RetrievalQAWithSourcesChain: The RAG pipeline.
     """
+    # Define a prompt template for financial analysis tasks
+    prompt_template = PromptTemplate(
+        input_variables=["question", "context"],
+        template="""
+        You are a financial analyst specializing in FAANG companies. You write in a very concise way, similar to Wall Street Journal articles.
+        Question: {question}
+        Context: {context}
+        Provide a response based on the provided context.
+        """
+    )
+
     # Initialize GPT-4o-mini LLM with model parameters
     llm = ChatOpenAI(
         model="gpt-4o-mini",
@@ -36,10 +48,11 @@ def create_rag_pipeline(vector_store):
     # Create a retriever from the vector store
     retriever = vector_store.as_retriever()
 
-    # Create a RetrievalQA chain with the LLM and retriever
+    # Create the RetrievalQAWithSourcesChain using `from_chain_type`
     qa_chain = RetrievalQAWithSourcesChain.from_chain_type(
         llm=llm,
         retriever=retriever,
+        chain_type_kwargs={"prompt": prompt_template, "document_variable_name": "context"},  # Pass the prompt template here
         return_source_documents=True  # Return source documents along with the result
     )
     
@@ -58,22 +71,22 @@ if __name__ == "__main__":
     vector_store = create_vector_store(chunks)
 
     # Create the RAG pipeline using GPT-4o-mini
-    qa_pipeline = create_rag_pipeline(vector_store)
+    rag_pipeline = create_rag_pipeline(vector_store)
 
     # Define a query for testing
-    query = "What are Apple's key risk factors?"
+    query = "Give me 3 reasons why Apple is better than Google, in terms of financial metrics?"
 
     try:
-        # Use __call__() to get both result and source documents
-        response = qa_pipeline.invoke({"question": query})
+        # Use `.invoke()` to run the query through the RAG pipeline and get results
+        response = rag_pipeline.invoke({"question": query})
 
         # Extract and print the result and source documents
         print("Generated Answer:")
         print(response["answer"])
         
-        print("\nSource Documents:")
-        for doc in response["sources"]:
-            print(f"- {doc}")  # Directly print the document string
+        # print("\nSource Documents:")
+        # for doc in response["source_documents"]:
+        #     print(f"- {doc.page_content}")
     
     except Exception as e:
         print(f"Error occurred: {e}")
